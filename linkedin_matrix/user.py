@@ -200,25 +200,18 @@ class User(DBUser, BaseUser):
             {h.name: h.value for h in await HttpHeader.get_for_mxid(self.mxid)},
         )
 
-        backoff = 1.0
-        while True:
-            try:
-                self.user_profile_cache = await self.client.get_user_profile()
-                break
-            except (TooManyRedirects, ServerConnectionError) as e:
-                self.log.info(f"Failed to get user profile: {e}")
-                await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, message=str(e))
-                return False
-            except Exception as e:
-                self.log.exception("Failed to get user profile")
-                time.sleep(backoff)
-                backoff *= 2
-                if backoff > 64:
-                    # If we can't get the user profile and it's not due to the session being
-                    # invalid, it's probably a network error. Go ahead and push the UNKNOWN_ERROR,
-                    # and then crash the bridge.
-                    await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, message=str(e))
-                    sys.exit(1)
+        # This part of code has been reverted to the following commit.
+        # https://github.com/getdex/linkedin-bridge/blob/2cae15ee08e64bdba876f33d31404c04bde29823/linkedin_matrix/user.py#L201-L214
+        try:
+            self.user_profile_cache = await self.client.get_user_profile()
+        except (TooManyRedirects, ServerConnectionError) as e:
+            self.log.info(f"Failed to get user profile: {e}")
+            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, message=str(e))
+            return False
+        except Exception as e:
+            self.log.exception("Failed to get user profile")
+            await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, message=str(e))
+            return False
 
         if (mp := self.user_profile_cache.mini_profile) and mp.entity_urn:
             self.li_member_urn = mp.entity_urn
